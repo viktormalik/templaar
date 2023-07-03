@@ -14,18 +14,25 @@ struct Templaar {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    New,
+    New { name: Option<String> },
 }
 
-fn new() -> Result<(), Box<dyn error::Error>> {
-    let mut templ_name = String::new();
-    print!("Enter template name (default 'templ'): ");
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut templ_name)?;
+fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
+    let templ_name = match name {
+        Some(n) => n.clone(),
+        None => {
+            // Read template name from stdin
+            let mut buf = String::new();
+            print!("Enter template name (default 'templ'): ");
+            io::stdout().flush()?;
+            io::stdin().read_line(&mut buf)?;
 
-    if templ_name.trim().is_empty() {
-        templ_name = "templ".to_string();
-    }
+            match buf.trim() {
+                "" => "templ".to_string(),
+                b => b.to_string(),
+            }
+        }
+    };
 
     let editor = env::var("EDITOR")?;
     let templ_file = env::current_dir()?.join(format!(".{templ_name}.aar"));
@@ -38,7 +45,7 @@ fn main() {
     let templaar = Templaar::parse();
 
     if let Err(e) = match templaar.command {
-        Command::New => new(),
+        Command::New { name } => new(&name),
     } {
         eprintln!("Error: {e}");
         process::exit(1);
