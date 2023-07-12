@@ -198,3 +198,31 @@ fn test_take_named() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn test_take_from_template() -> Result<(), Box<dyn Error>> {
+    let templ_content = "Template";
+    let other_content = "Template";
+    let _t = Test::init(
+        "take_from_template",
+        vec![],
+        HashMap::from([
+            (PathBuf::from_str(".templ.aar")?, templ_content.to_string()),
+            (PathBuf::from_str(".other.aar")?, other_content.to_string()),
+        ]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg("name").arg("-t").arg("other");
+    cmd.assert().success();
+
+    let file_path = Path::new("name");
+    let mut contents = String::new();
+    assert!(file_path.exists());
+    fs::File::open(&file_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, other_content);
+
+    Ok(())
+}

@@ -17,8 +17,14 @@ struct Templaar {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    New { name: Option<String> },
-    Take { name: Option<String> },
+    New {
+        name: Option<String>,
+    },
+    Take {
+        name: Option<String>,
+        #[clap(long, short = 't')]
+        template: Option<String>,
+    },
 }
 
 /// Templaar errors
@@ -57,10 +63,15 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-/// Searches for a file with the .aar extension in `dir`
-fn find_templ_in_dir(dir: &Path) -> Result<Option<PathBuf>, io::Error> {
+/// Searches for a template file in `dir`.
+/// If `name` is given, looks for a file named ".<name>.aar",
+/// otherwise looks for any file the the ".aar" extension.
+fn find_templ_in_dir(dir: &Path, name: &Option<String>) -> Result<Option<PathBuf>, io::Error> {
     match fs::read_dir(dir)?.find(|f| match f {
-        Ok(file) => file.path().extension() == Some(OsStr::new("aar")),
+        Ok(file) => match name {
+            Some(n) => file.path().file_name() == Some(OsStr::new(&format!(".{n}.aar"))),
+            None => file.path().extension() == Some(OsStr::new("aar")),
+        },
         Err(_) => false,
     }) {
         Some(f) => f.map(|file| Some(file.path())),
@@ -70,10 +81,10 @@ fn find_templ_in_dir(dir: &Path) -> Result<Option<PathBuf>, io::Error> {
 
 /// Searches for a template, starting from the current directory and recursively descending into
 /// its parents, until any template is found.
-fn find_templ() -> Result<Option<PathBuf>, io::Error> {
+fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, io::Error> {
     let mut dir = env::current_dir()?;
     loop {
-        match find_templ_in_dir(&dir)? {
+        match find_templ_in_dir(&dir, name)? {
             Some(file) => return Ok(Some(dir.join(&file))),
             None => match dir.parent() {
                 Some(parent) => dir = parent.to_path_buf(),
@@ -83,9 +94,9 @@ fn find_templ() -> Result<Option<PathBuf>, io::Error> {
     }
 }
 
-fn take(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
+fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn error::Error>> {
     // Find and read the template
-    let templ_file = find_templ()?.ok_or(NoTemplateFound)?;
+    let templ_file = find_templ(template)?.ok_or(NoTemplateFound)?;
     let mut templ = String::new();
     fs::File::open(&templ_file)?.read_to_string(&mut templ)?;
 
@@ -110,7 +121,7 @@ fn main() {
 
     if let Err(e) = match templaar.command {
         Command::New { name } => new(&name),
-        Command::Take { name } => take(&name),
+        Command::Take { name, template } => take(&name, &template),
     } {
         eprintln!("Error: {e}");
         process::exit(1);
