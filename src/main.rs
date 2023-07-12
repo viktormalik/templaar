@@ -18,7 +18,7 @@ struct Templaar {
 #[derive(Subcommand, Debug)]
 enum Command {
     New { name: Option<String> },
-    Take,
+    Take { name: Option<String> },
 }
 
 /// Templaar errors
@@ -83,14 +83,17 @@ fn find_templ() -> Result<Option<PathBuf>, io::Error> {
     }
 }
 
-fn take() -> Result<(), Box<dyn error::Error>> {
+fn take(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
     // Find and read the template
     let templ_file = find_templ()?.ok_or(NoTemplateFound)?;
     let mut templ = String::new();
     fs::File::open(&templ_file)?.read_to_string(&mut templ)?;
 
-    // default filename is the template name without the leading '.' and file extension
-    let filename: String = templ_file.file_stem().unwrap().to_str().unwrap()[1..].to_string();
+    let filename = match name {
+        Some(n) => n.clone(),
+        // default filename is the template name without the leading '.' and file extension
+        None => templ_file.file_stem().unwrap().to_str().unwrap()[1..].to_string(),
+    };
     let file = env::current_dir()?.join(filename);
 
     // Write template contents to file and open it in EDITOR
@@ -107,7 +110,7 @@ fn main() {
 
     if let Err(e) = match templaar.command {
         Command::New { name } => new(&name),
-        Command::Take => take(),
+        Command::Take { name } => take(&name),
     } {
         eprintln!("Error: {e}");
         process::exit(1);

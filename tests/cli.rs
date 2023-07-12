@@ -171,3 +171,30 @@ fn test_take_subdir() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn test_take_named() -> Result<(), Box<dyn Error>> {
+    let templ_content = "Template";
+    let _t = Test::init(
+        "take_named",
+        vec![],
+        HashMap::from([(PathBuf::from_str(".templ.aar")?, templ_content.to_string())]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg("name");
+    cmd.assert().success();
+
+    let file_path = Path::new("name");
+    let mut contents = String::new();
+    assert!(file_path.exists());
+    fs::File::open(&file_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, templ_content);
+
+    let default_file_path = Path::new("templ");
+    assert!(!default_file_path.exists());
+
+    Ok(())
+}
