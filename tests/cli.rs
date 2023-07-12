@@ -1,33 +1,69 @@
 use assert_cmd::Command;
 use serial_test::serial;
 use std::{
+    collections::HashMap,
     env,
     error::Error,
     fs,
     io::{Read, Write},
-    path::Path,
+    ops,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 fn set_editor(editor: &str) {
     env::set_var("EDITOR", editor);
 }
 
-fn set_default_editor() {
-    set_editor("touch");
+struct Test {
+    cwd: PathBuf,
+    test_dir: PathBuf,
+}
+
+impl Test {
+    pub fn init(
+        name: &str,
+        init_dirs: Vec<PathBuf>,
+        init_files: HashMap<PathBuf, String>,
+        editor: &str,
+    ) -> Result<Self, std::io::Error> {
+        set_editor(editor);
+        // Create test directory and change to it
+        let test_dir = Path::new(name).to_path_buf();
+        fs::create_dir(&test_dir)?;
+        let cwd = env::current_dir()?;
+        env::set_current_dir(&test_dir)?;
+
+        // Create directories
+        for dir in &init_dirs {
+            fs::create_dir_all(dir)?;
+        }
+        // Create pre-initialized files
+        for (file, contents) in init_files {
+            fs::File::create(&file)?.write_all(contents.as_bytes())?;
+        }
+
+        Ok(Self { cwd, test_dir })
+    }
+}
+
+impl ops::Drop for Test {
+    fn drop(&mut self) {
+        let _ = env::set_current_dir(&self.cwd);
+        let _ = fs::remove_dir_all(&self.test_dir);
+    }
 }
 
 #[test]
 #[serial]
 fn test_new_default() -> Result<(), Box<dyn Error>> {
-    set_default_editor();
+    let _t = Test::init("new_default", vec![], HashMap::new(), "touch");
 
     let mut cmd = Command::cargo_bin("templaar")?;
     cmd.arg("new");
     cmd.assert().success();
 
-    let templ_path = Path::new(".templ.aar");
-    assert!(templ_path.exists());
-    fs::remove_file(templ_path)?;
+    assert!(Path::new(".templ.aar").exists());
 
     Ok(())
 }
@@ -35,7 +71,7 @@ fn test_new_default() -> Result<(), Box<dyn Error>> {
 #[test]
 #[serial]
 fn test_new_name_from_arg() -> Result<(), Box<dyn Error>> {
-    set_default_editor();
+    let _t = Test::init("new_name_from_arg", vec![], HashMap::new(), "touch");
 
     let mut cmd = Command::cargo_bin("templaar")?;
     cmd.arg("new").arg("arg_name");
@@ -43,7 +79,6 @@ fn test_new_name_from_arg() -> Result<(), Box<dyn Error>> {
 
     let templ_path = Path::new(".arg_name.aar");
     assert!(templ_path.exists());
-    fs::remove_file(templ_path)?;
 
     Ok(())
 }
@@ -51,7 +86,7 @@ fn test_new_name_from_arg() -> Result<(), Box<dyn Error>> {
 #[test]
 #[serial]
 fn test_new_name_from_stdin() -> Result<(), Box<dyn Error>> {
-    set_default_editor();
+    let _t = Test::init("new_name_from_stdin", vec![], HashMap::new(), "touch");
 
     let mut cmd = Command::cargo_bin("templaar")?;
     cmd.arg("new").write_stdin("stdin_name");
@@ -59,7 +94,6 @@ fn test_new_name_from_stdin() -> Result<(), Box<dyn Error>> {
 
     let templ_path = Path::new(".stdin_name.aar");
     assert!(templ_path.exists());
-    fs::remove_file(templ_path)?;
 
     Ok(())
 }
@@ -91,15 +125,13 @@ fn test_invalid_editor() -> Result<(), Box<dyn Error>> {
 #[test]
 #[serial]
 fn test_take_same_dir() -> Result<(), Box<dyn Error>> {
-    set_default_editor();
-
-    let dir = Path::new("testdir");
-    fs::create_dir(dir)?;
-    let templ_path = dir.join(".templ.aar");
-    fs::File::create(&templ_path)?.write_all(b"Template")?;
-
-    let cwd = env::current_dir()?;
-    env::set_current_dir(dir)?;
+    let templ_content = "Template";
+    let _t = Test::init(
+        "take_same_dir",
+        vec![],
+        HashMap::from([(PathBuf::from_str(".templ.aar")?, templ_content.to_string())]),
+        "touch",
+    );
 
     let mut cmd = Command::cargo_bin("templaar")?;
     cmd.arg("take");
@@ -109,10 +141,7 @@ fn test_take_same_dir() -> Result<(), Box<dyn Error>> {
     let mut contents = String::new();
     assert!(file_path.exists());
     fs::File::open(&file_path)?.read_to_string(&mut contents)?;
-    assert_eq!(contents, "Template");
-
-    env::set_current_dir(cwd)?;
-    fs::remove_dir_all(&dir)?;
+    assert_eq!(contents, templ_content);
 
     Ok(())
 }
@@ -120,18 +149,16 @@ fn test_take_same_dir() -> Result<(), Box<dyn Error>> {
 #[test]
 #[serial]
 fn test_take_subdir() -> Result<(), Box<dyn Error>> {
-    set_default_editor();
+    let subdir = Path::new("testdir");
+    let templ_content = "Template";
+    let _t = Test::init(
+        "take_subdir",
+        vec![subdir.to_path_buf()],
+        HashMap::from([(subdir.join(".templ.aar"), templ_content.to_string())]),
+        "touch",
+    );
 
-    let templ_dir = Path::new("testdir");
-    let file_dir = templ_dir.join("subdir");
-    fs::create_dir_all(&file_dir)?;
-
-    let templ_path = templ_dir.join(".templ.aar");
-    fs::File::create(&templ_path)?.write_all(b"Template")?;
-
-    let cwd = env::current_dir()?;
-    env::set_current_dir(file_dir)?;
-
+    env::set_current_dir("testdir")?;
     let mut cmd = Command::cargo_bin("templaar")?;
     cmd.arg("take");
     cmd.assert().success();
@@ -140,10 +167,7 @@ fn test_take_subdir() -> Result<(), Box<dyn Error>> {
     let mut contents = String::new();
     assert!(file_path.exists());
     fs::File::open(&file_path)?.read_to_string(&mut contents)?;
-    assert_eq!(contents, "Template");
-
-    env::set_current_dir(cwd)?;
-    fs::remove_dir_all(&templ_dir)?;
+    assert_eq!(contents, templ_content);
 
     Ok(())
 }
