@@ -100,6 +100,23 @@ fn test_new_name_from_stdin() -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[serial]
+fn test_new_exists() -> Result<(), Box<dyn Error>> {
+    let _t = Test::init(
+        "new_exists",
+        vec![PathBuf::from_str(".templ.aar")?],
+        HashMap::new(),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("new");
+    cmd.assert().failure();
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn test_no_editor() -> Result<(), Box<dyn Error>> {
     env::remove_var("EDITOR");
 
@@ -223,6 +240,26 @@ fn test_take_from_template() -> Result<(), Box<dyn Error>> {
     assert!(file_path.exists());
     fs::File::open(&file_path)?.read_to_string(&mut contents)?;
     assert_eq!(contents, other_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_take_exists() -> Result<(), Box<dyn Error>> {
+    let _t = Test::init(
+        "take_exists",
+        vec![
+            PathBuf::from_str(".templ.aar")?,
+            PathBuf::from_str("templ")?,
+        ],
+        HashMap::new(),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take");
+    cmd.assert().failure();
 
     Ok(())
 }

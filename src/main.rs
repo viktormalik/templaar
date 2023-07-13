@@ -39,6 +39,23 @@ impl fmt::Display for NoTemplateFound {
     }
 }
 
+#[derive(Debug, Clone)]
+struct FileExists {
+    path: PathBuf,
+}
+
+impl error::Error for FileExists {}
+
+impl fmt::Display for FileExists {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "File {} already exists. Please edit it manually.",
+            self.path.to_str().ok_or(fmt::Error)?
+        )
+    }
+}
+
 fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
     let templ_name = match name {
         Some(n) => n.clone(),
@@ -56,8 +73,12 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
         }
     };
 
-    let editor = env::var("EDITOR")?;
     let templ_file = env::current_dir()?.join(format!(".{templ_name}.aar"));
+    if templ_file.exists() {
+        return Err(Box::new(FileExists { path: templ_file }));
+    }
+
+    let editor = env::var("EDITOR")?;
     process::Command::new(editor).arg(&templ_file).status()?;
 
     Ok(())
@@ -106,6 +127,10 @@ fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn 
         None => templ_file.file_stem().unwrap().to_str().unwrap()[1..].to_string(),
     };
     let file = env::current_dir()?.join(filename);
+
+    if file.exists() {
+        return Err(Box::new(FileExists { path: file }));
+    }
 
     // Write template contents to file and open it in EDITOR
     fs::File::create(&file)?.write_all(templ.as_bytes())?;
