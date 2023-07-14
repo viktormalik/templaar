@@ -57,6 +57,24 @@ impl fmt::Display for FileExists {
     }
 }
 
+#[derive(Debug, Clone)]
+struct AmbiguousTemplate {
+    names: Vec<String>,
+    dir: PathBuf,
+}
+
+impl error::Error for AmbiguousTemplate {}
+
+impl fmt::Display for AmbiguousTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Ambiguous template: found {:?} in {:?}. Use -t to select the template.",
+            self.names, self.dir,
+        )
+    }
+}
+
 /// Encode `templ` into the corresponding filename:
 ///   .`templ`.aar
 fn templ_to_path(templ: &str) -> PathBuf {
@@ -99,22 +117,34 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
 /// Searches for a template file in `dir`.
 /// If `name` is given, looks for the corresponding file,
 /// otherwise looks for any file the the ".aar" extension.
-fn find_templ_in_dir(dir: &Path, name: &Option<String>) -> Result<Option<PathBuf>, io::Error> {
-    match fs::read_dir(dir)?.find(|f| match f {
-        Ok(file) => match name {
-            Some(n) => path_to_templ(&file.path()) == *n,
-            None => file.path().extension() == Some(OsStr::new("aar")),
-        },
-        Err(_) => false,
-    }) {
-        Some(f) => f.map(|file| Some(file.path())),
-        None => Ok(None),
+fn find_templ_in_dir(
+    dir: &Path,
+    name: &Option<String>,
+) -> Result<Option<PathBuf>, Box<dyn error::Error>> {
+    let templates: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|f| match f {
+            Ok(file) => (match name {
+                Some(n) => path_to_templ(&file.path()) == *n,
+                None => file.path().extension() == Some(OsStr::new("aar")),
+            })
+            .then_some(file.path()),
+            Err(_) => None,
+        })
+        .collect();
+
+    match &templates[..] {
+        [] => Ok(None),
+        [f] => Ok(Some(f.clone())),
+        _ => Err(Box::new(AmbiguousTemplate {
+            names: templates.iter().map(path_to_templ).collect(),
+            dir: dir.to_path_buf(),
+        })),
     }
 }
 
 /// Searches for a template, starting from the current directory and recursively descending into
 /// its parents, until any template is found.
-fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, io::Error> {
+fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, Box<dyn error::Error>> {
     let mut dir = env::current_dir()?;
     loop {
         match find_templ_in_dir(&dir, name)? {

@@ -263,3 +263,23 @@ fn test_take_exists() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn test_take_ambiguous() -> Result<(), Box<dyn Error>> {
+    let _t = Test::init(
+        "take_ambiguous",
+        vec![
+            PathBuf::from_str(".templ.aar")?,
+            PathBuf::from_str(".note.aar")?,
+        ],
+        HashMap::new(),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take");
+    cmd.assert().failure();
+
+    Ok(())
+}
