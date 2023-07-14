@@ -10,7 +10,10 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(name = "templaar")]
+#[clap(
+    name = "templaar",
+    about = "A simple tool for creating text files from templates"
+)]
 struct Templaar {
     #[clap(subcommand)]
     command: Command,
@@ -18,11 +21,16 @@ struct Templaar {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Create a template
     New {
+        /// Name of the template
         name: Option<String>,
     },
+    /// Create a file from a template
     Take {
+        /// Name of the created file
         name: Option<String>,
+        /// Use specific template
         #[clap(long, short = 't')]
         template: Option<String>,
     },
