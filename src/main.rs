@@ -6,6 +6,7 @@ use std::{
     io::{self, Read, Write},
     path::{Path, PathBuf},
     process,
+    str::FromStr,
 };
 
 #[derive(Debug, Parser)]
@@ -56,6 +57,17 @@ impl fmt::Display for FileExists {
     }
 }
 
+/// Encode `templ` into the corresponding filename:
+///   .`templ`.aar
+fn templ_to_path(templ: &str) -> PathBuf {
+    PathBuf::from_str(&format!(".{templ}.aar")).unwrap()
+}
+
+/// Decode template name from `path`, inverse to `templ_to_path`.
+fn path_to_templ(path: &PathBuf) -> String {
+    path.file_stem().unwrap().to_str().unwrap_or("<invalid>")[1..].to_string()
+}
+
 fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
     let templ_name = match name {
         Some(n) => n.clone(),
@@ -73,7 +85,7 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
         }
     };
 
-    let templ_file = env::current_dir()?.join(format!(".{templ_name}.aar"));
+    let templ_file = env::current_dir()?.join(templ_to_path(&templ_name));
     if templ_file.exists() {
         return Err(Box::new(FileExists { path: templ_file }));
     }
@@ -85,12 +97,12 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
 }
 
 /// Searches for a template file in `dir`.
-/// If `name` is given, looks for a file named ".<name>.aar",
+/// If `name` is given, looks for the corresponding file,
 /// otherwise looks for any file the the ".aar" extension.
 fn find_templ_in_dir(dir: &Path, name: &Option<String>) -> Result<Option<PathBuf>, io::Error> {
     match fs::read_dir(dir)?.find(|f| match f {
         Ok(file) => match name {
-            Some(n) => file.path().file_name() == Some(OsStr::new(&format!(".{n}.aar"))),
+            Some(n) => path_to_templ(&file.path()) == *n,
             None => file.path().extension() == Some(OsStr::new("aar")),
         },
         Err(_) => false,
@@ -123,8 +135,7 @@ fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn 
 
     let filename = match name {
         Some(n) => n.clone(),
-        // default filename is the template name without the leading '.' and file extension
-        None => templ_file.file_stem().unwrap().to_str().unwrap()[1..].to_string(),
+        None => path_to_templ(&templ_file),
     };
     let file = env::current_dir()?.join(filename);
 
