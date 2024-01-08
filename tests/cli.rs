@@ -272,6 +272,65 @@ fn test_take_from_template() -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[serial]
+fn test_take_global() -> Result<(), Box<dyn Error>> {
+    let home_dir = Path::new("home");
+    let config_dir = home_dir.join(".config").join("templaar");
+    let templ_content = "Template";
+    let _t = Test::init(
+        "take_global",
+        vec![config_dir.to_path_buf()],
+        HashMap::from([(config_dir.join("templ.aar"), templ_content.to_string())]),
+        "touch",
+    );
+    env::set_var("HOME", env::current_dir()?.join(home_dir));
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg("-t").arg("templ");
+    cmd.assert().success();
+
+    let file_path = Path::new("templ");
+    let mut contents = String::new();
+    assert!(file_path.exists());
+    fs::File::open(&file_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, templ_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_take_global_precedence() -> Result<(), Box<dyn Error>> {
+    let home_dir = Path::new("home");
+    let config_dir = home_dir.join(".config").join("templaar");
+    let templ_content = "Template";
+    let other_content = "Other template";
+    let _t = Test::init(
+        "take_global",
+        vec![config_dir.to_path_buf()],
+        HashMap::from([
+            (config_dir.join("templ.aar"), templ_content.to_string()),
+            (PathBuf::from_str(".templ.aar")?, other_content.to_string()),
+        ]),
+        "touch",
+    );
+    env::set_var("HOME", env::current_dir()?.join(home_dir));
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg("-t").arg("templ");
+    cmd.assert().success();
+
+    let file_path = Path::new("templ");
+    let mut contents = String::new();
+    assert!(file_path.exists());
+    fs::File::open(&file_path)?.read_to_string(&mut contents)?;
+    // Local template has precedence over the global one
+    assert_eq!(contents, other_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn test_take_exists() -> Result<(), Box<dyn Error>> {
     let _t = Test::init(
         "take_exists",
