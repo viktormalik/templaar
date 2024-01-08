@@ -47,7 +47,9 @@ impl error::Error for NoTemplateFound {}
 
 impl fmt::Display for NoTemplateFound {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "No template found in the current or parent directories")
+        let msg = "No template found in the current or parent directories.\n\
+                   For global templates, specify the template name using the -t option.";
+        write!(f, "{}", msg)
     }
 }
 
@@ -95,7 +97,11 @@ fn templ_to_path(templ: &str, global: bool) -> PathBuf {
 
 /// Decode template name from `path`, inverse to `templ_to_path`.
 fn path_to_templ(path: &PathBuf) -> String {
-    path.file_stem().unwrap().to_str().unwrap_or("<invalid>")[1..].to_string()
+    let mut templ = path.file_stem().unwrap().to_str().unwrap_or("<invalid>");
+    if templ.starts_with(".") {
+        templ = &templ[1..];
+    }
+    templ.to_string()
 }
 
 /// Get global templates directory (~/.config/templaar).
@@ -171,8 +177,10 @@ fn find_templ_in_dir(
     }
 }
 
-/// Searches for a template, starting from the current directory and recursively descending into
-/// its parents, until any template is found.
+/// Searches for a template.
+///
+/// The search starts from the current directory and recursively descends into the parents.
+/// If no template is found, the global templates directory is searched.
 fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, Box<dyn error::Error>> {
     let mut dir = env::current_dir()?;
     loop {
@@ -180,10 +188,16 @@ fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, Box<dyn error::E
             Some(file) => return Ok(Some(dir.join(&file))),
             None => match dir.parent() {
                 Some(parent) => dir = parent.to_path_buf(),
-                None => return Ok(None),
+                None => break,
             },
         }
     }
+
+    // Search global directory -> name must be specified
+    if name.is_none() {
+        return Ok(None);
+    }
+    return find_templ_in_dir(&global_dir()?, name);
 }
 
 fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn error::Error>> {
