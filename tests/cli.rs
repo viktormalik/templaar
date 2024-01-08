@@ -246,7 +246,7 @@ fn test_take_named() -> Result<(), Box<dyn Error>> {
 #[serial]
 fn test_take_from_template() -> Result<(), Box<dyn Error>> {
     let templ_content = "Template";
-    let other_content = "Template";
+    let other_content = "Other template";
     let _t = Test::init(
         "take_from_template",
         vec![],
