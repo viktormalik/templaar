@@ -100,6 +100,32 @@ fn test_new_name_from_stdin() -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[serial]
+fn test_new_global() -> Result<(), Box<dyn Error>> {
+    let home_dir = Path::new("home");
+    let config_dir = home_dir.join(".config").join("templaar");
+    let _t = Test::init(
+        "new_global",
+        vec![config_dir.to_path_buf()],
+        HashMap::new(),
+        "touch",
+    );
+    env::set_var("HOME", env::current_dir()?.join(home_dir));
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("new").arg("--global");
+    cmd.assert().success();
+
+    let templ_path = config_dir.join("templ.aar");
+    assert!(templ_path.exists());
+    for path in fs::read_dir(env::current_dir()?)? {
+        assert!(path?.path().is_dir());
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn test_new_exists() -> Result<(), Box<dyn Error>> {
     let _t = Test::init(
         "new_exists",

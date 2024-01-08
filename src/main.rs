@@ -25,6 +25,9 @@ enum Command {
     New {
         /// Name of the template
         name: Option<String>,
+        /// Make the template global
+        #[clap(long, short)]
+        global: bool,
     },
     /// Create a file from a template
     Take {
@@ -85,8 +88,9 @@ impl fmt::Display for AmbiguousTemplate {
 
 /// Encode `templ` into the corresponding filename:
 ///   .`templ`.aar
-fn templ_to_path(templ: &str) -> PathBuf {
-    PathBuf::from_str(&format!(".{templ}.aar")).unwrap()
+fn templ_to_path(templ: &str, global: bool) -> PathBuf {
+    let prefix = if global { "" } else { "." };
+    PathBuf::from_str(&format!("{prefix}{templ}.aar")).unwrap()
 }
 
 /// Decode template name from `path`, inverse to `templ_to_path`.
@@ -94,7 +98,19 @@ fn path_to_templ(path: &PathBuf) -> String {
     path.file_stem().unwrap().to_str().unwrap_or("<invalid>")[1..].to_string()
 }
 
-fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
+/// Get global templates directory (~/.config/templaar).
+/// Creates the directory if it doesn't exist.
+fn global_dir() -> Result<PathBuf, Box<dyn error::Error>> {
+    let dir: PathBuf = [env::var("HOME")?.as_str(), ".config", "templaar"]
+        .iter()
+        .collect();
+    if !dir.exists() {
+        fs::create_dir(&dir)?;
+    }
+    return Ok(dir);
+}
+
+fn new(name: &Option<String>, global: bool) -> Result<(), Box<dyn error::Error>> {
     let templ_name = match name {
         Some(n) => n.clone(),
         None => {
@@ -111,7 +127,12 @@ fn new(name: &Option<String>) -> Result<(), Box<dyn error::Error>> {
         }
     };
 
-    let templ_file = env::current_dir()?.join(templ_to_path(&templ_name));
+    let templ_dir = match global {
+        true => global_dir()?,
+        false => env::current_dir()?,
+    };
+    let templ_file = templ_dir.join(templ_to_path(&templ_name, global));
+
     if templ_file.exists() {
         return Err(Box::new(FileExists { path: templ_file }));
     }
@@ -194,7 +215,7 @@ fn main() {
     let templaar = Templaar::parse();
 
     if let Err(e) = match templaar.command {
-        Command::New { name } => new(&name),
+        Command::New { name, global } => new(&name, global),
         Command::Take { name, template } => take(&name, &template),
     } {
         eprintln!("Error: {e}");
