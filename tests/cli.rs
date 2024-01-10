@@ -331,6 +331,27 @@ fn test_take_global_precedence() -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[serial]
+fn test_take_no_change() -> Result<(), Box<dyn Error>> {
+    let templ_content = "Template";
+    let _t = Test::init(
+        "take_no_change",
+        vec![],
+        HashMap::from([(PathBuf::from_str(".templ.aar")?, templ_content.to_string())]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").write_stdin("n");
+    cmd.assert().success();
+
+    let file_path = Path::new("templ");
+    assert!(!file_path.exists());
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn test_take_exists() -> Result<(), Box<dyn Error>> {
     let _t = Test::init(
         "take_exists",
