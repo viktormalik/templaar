@@ -220,7 +220,20 @@ fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn 
     fs::File::create(&file)?.write_all(templ.as_bytes())?;
 
     let editor = env::var("EDITOR")?;
-    process::Command::new(editor).arg(file).status()?;
+    process::Command::new(editor).arg(&file).status()?;
+
+    let mut file_contents = String::new();
+    fs::File::open(&file)?.read_to_string(&mut file_contents)?;
+    if file_contents == templ {
+        let mut buf = String::new();
+        print!("The file contains no change from the template. Save it anyways? [Y/n]: ");
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut buf)?;
+
+        if buf.trim().to_lowercase() == "n" {
+            std::fs::remove_file(file)?;
+        }
+    }
 
     Ok(())
 }
