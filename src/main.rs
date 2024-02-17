@@ -54,17 +54,34 @@ impl fmt::Display for NoTemplateFound {
 }
 
 #[derive(Debug, Clone)]
-struct FileExists {
+struct TemplExists {
     path: PathBuf,
 }
 
-impl error::Error for FileExists {}
+impl error::Error for TemplExists {}
 
-impl fmt::Display for FileExists {
+impl fmt::Display for TemplExists {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "File {} already exists. Please edit it manually.",
+            "Template {} already exists. Please edit it manually.",
+            self.path.to_str().ok_or(fmt::Error)?
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PathExists {
+    path: PathBuf,
+}
+
+impl error::Error for PathExists {}
+
+impl fmt::Display for PathExists {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Cannot create {} from template, path already exists.",
             self.path.to_str().ok_or(fmt::Error)?
         )
     }
@@ -140,7 +157,7 @@ fn new(name: &Option<String>, global: bool) -> Result<(), Box<dyn error::Error>>
     let templ_file = templ_dir.join(templ_to_path(&templ_name, global));
 
     if templ_file.exists() {
-        return Err(Box::new(FileExists { path: templ_file }));
+        return Err(Box::new(TemplExists { path: templ_file }));
     }
 
     let editor = env::var("EDITOR")?;
@@ -213,7 +230,7 @@ fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn 
     let file = env::current_dir()?.join(filename);
 
     if file.exists() {
-        return Err(Box::new(FileExists { path: file }));
+        return Err(Box::new(PathExists { path: file }));
     }
 
     // Write template contents to file and open it in EDITOR
