@@ -129,8 +129,8 @@ fn test_new_global() -> Result<(), Box<dyn Error>> {
 fn test_new_exists() -> Result<(), Box<dyn Error>> {
     let _t = Test::init(
         "new_exists",
-        vec![PathBuf::from_str(".templ.aar")?],
-        HashMap::new(),
+        vec![],
+        HashMap::from([(PathBuf::from_str(".templ.aar")?, String::new())]),
         "touch",
     );
 
@@ -355,11 +355,11 @@ fn test_take_no_change() -> Result<(), Box<dyn Error>> {
 fn test_take_exists() -> Result<(), Box<dyn Error>> {
     let _t = Test::init(
         "take_exists",
-        vec![
-            PathBuf::from_str(".templ.aar")?,
-            PathBuf::from_str("templ")?,
-        ],
-        HashMap::new(),
+        vec![],
+        HashMap::from([
+            (PathBuf::from_str(".templ.aar")?, String::new()),
+            (PathBuf::from_str("templ")?, String::new()),
+        ]),
         "touch",
     );
 
