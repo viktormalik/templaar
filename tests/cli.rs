@@ -143,6 +143,42 @@ fn test_new_exists() -> Result<(), Box<dyn Error>> {
 
 #[test]
 #[serial]
+fn test_new_from_file() -> Result<(), Box<dyn Error>> {
+    let templ_content = "Template";
+    let _t = Test::init(
+        "new_from_file",
+        vec![],
+        HashMap::from([(PathBuf::from_str("templ")?, templ_content.to_string())]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("new").arg("-f").arg("templ").arg("templ");
+    cmd.assert().success();
+
+    let templ_path = Path::new(".templ.aar");
+    let mut contents = String::new();
+    assert!(templ_path.exists());
+    fs::File::open(&templ_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, templ_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_new_from_file_exists() -> Result<(), Box<dyn Error>> {
+    let _t = Test::init("new_from_file_missing", vec![], HashMap::new(), "touch");
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("new").arg("-f").arg("templ").arg("templ");
+    cmd.assert().failure();
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn test_no_editor() -> Result<(), Box<dyn Error>> {
     env::remove_var("EDITOR");
 
