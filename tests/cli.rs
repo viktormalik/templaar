@@ -153,7 +153,7 @@ fn test_new_from_file() -> Result<(), Box<dyn Error>> {
     );
 
     let mut cmd = Command::cargo_bin("templaar")?;
-    cmd.arg("new").arg("-f").arg("templ").arg("templ");
+    cmd.arg("new").arg("templ").arg("-f").arg("templ");
     cmd.assert().success();
 
     let templ_path = Path::new(".templ.aar");
@@ -161,6 +161,47 @@ fn test_new_from_file() -> Result<(), Box<dyn Error>> {
     assert!(templ_path.exists());
     fs::File::open(&templ_path)?.read_to_string(&mut contents)?;
     assert_eq!(contents, templ_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_new_from_multiple_files() -> Result<(), Box<dyn Error>> {
+    let file1_content = "Template";
+    let file2_content = "Other template";
+    let _t = Test::init(
+        "new_from_multiple_files",
+        vec![],
+        HashMap::from([
+            (PathBuf::from_str("file1")?, file1_content.to_string()),
+            (PathBuf::from_str("file2")?, file2_content.to_string()),
+        ]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("new")
+        .arg("templ")
+        .arg("-f")
+        .arg("file1")
+        .arg("file2");
+    cmd.assert().success();
+
+    let templ_path = Path::new(".templ.aar");
+    let file1_path = templ_path.join("file1");
+    let file2_path = templ_path.join("file2");
+    assert!(templ_path.exists());
+    assert!(file1_path.exists());
+    assert!(file2_path.exists());
+
+    let mut contents = String::new();
+    fs::File::open(&file1_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file1_content);
+
+    contents.clear();
+    fs::File::open(&file2_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file2_content);
 
     Ok(())
 }
