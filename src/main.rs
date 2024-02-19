@@ -28,9 +28,10 @@ enum Command {
         /// Make the template global
         #[clap(long, short)]
         global: bool,
-        /// Create the template from file
-        #[clap(long, short)]
-        file: Option<PathBuf>,
+        /// Create the template from file(s).
+        /// In case of multiple files, the template will be a directory.
+        #[clap(long, short, verbatim_doc_comment, num_args(0..))]
+        files: Vec<PathBuf>,
     },
     /// Create a file from a template
     Take {
@@ -139,7 +140,7 @@ fn global_dir() -> Result<PathBuf, Box<dyn error::Error>> {
 fn new(
     name: &Option<String>,
     global: bool,
-    file: &Option<PathBuf>,
+    files: &Vec<PathBuf>,
 ) -> Result<(), Box<dyn error::Error>> {
     let templ_name = match name {
         Some(n) => n.clone(),
@@ -167,9 +168,22 @@ fn new(
         return Err(Box::new(TemplExists { path: templ_file }));
     }
 
-    if file.is_some() {
-        fs::copy(file.as_ref().unwrap(), &templ_file)?;
-    }
+    match files.len() {
+        0 => {}
+        1 => {
+            // Single file -> copy it to template
+            fs::copy(&files[0], &templ_file)?;
+        }
+        _ => {
+            // Multiple files -> make template a directory containing all files
+            // under their original names
+            fs::create_dir(&templ_file)?;
+            for f in files {
+                fs::copy(f, templ_file.join(f.file_name().unwrap()))?;
+            }
+        }
+    };
+
     let editor = env::var("EDITOR")?;
     process::Command::new(editor).arg(&templ_file).status()?;
 
@@ -269,7 +283,11 @@ fn main() {
     let templaar = Templaar::parse();
 
     if let Err(e) = match templaar.command {
-        Command::New { name, global, file } => new(&name, global, &file),
+        Command::New {
+            name,
+            global,
+            files,
+        } => new(&name, global, &files),
         Command::Take { name, template } => take(&name, &template),
     } {
         eprintln!("Error: {e}");
