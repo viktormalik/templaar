@@ -28,6 +28,9 @@ enum Command {
         /// Make the template global
         #[clap(long, short)]
         global: bool,
+        /// Create the template from file
+        #[clap(long, short)]
+        file: Option<PathBuf>,
     },
     /// Create a file from a template
     Take {
@@ -133,7 +136,11 @@ fn global_dir() -> Result<PathBuf, Box<dyn error::Error>> {
     return Ok(dir);
 }
 
-fn new(name: &Option<String>, global: bool) -> Result<(), Box<dyn error::Error>> {
+fn new(
+    name: &Option<String>,
+    global: bool,
+    file: &Option<PathBuf>,
+) -> Result<(), Box<dyn error::Error>> {
     let templ_name = match name {
         Some(n) => n.clone(),
         None => {
@@ -160,6 +167,9 @@ fn new(name: &Option<String>, global: bool) -> Result<(), Box<dyn error::Error>>
         return Err(Box::new(TemplExists { path: templ_file }));
     }
 
+    if file.is_some() {
+        fs::copy(file.as_ref().unwrap(), &templ_file)?;
+    }
     let editor = env::var("EDITOR")?;
     process::Command::new(editor).arg(&templ_file).status()?;
 
@@ -259,7 +269,7 @@ fn main() {
     let templaar = Templaar::parse();
 
     if let Err(e) = match templaar.command {
-        Command::New { name, global } => new(&name, global),
+        Command::New { name, global, file } => new(&name, global, &file),
         Command::Take { name, template } => take(&name, &template),
     } {
         eprintln!("Error: {e}");
