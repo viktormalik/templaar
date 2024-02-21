@@ -466,3 +466,107 @@ fn test_take_ambiguous() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn test_take_from_dir() -> Result<(), Box<dyn Error>> {
+    let templ_dir = PathBuf::from_str(".templ.aar")?;
+    let file1_content = "Template";
+    let file2_content = "Other template";
+
+    let _t = Test::init(
+        "take_from_dir",
+        vec![templ_dir.clone()],
+        HashMap::from([
+            (templ_dir.join("file1"), file1_content.to_string()),
+            (templ_dir.join("file2"), file2_content.to_string()),
+        ]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take");
+    cmd.assert().success();
+
+    let target_path = Path::new("templ");
+    let file1_path = target_path.join("file1");
+    let file2_path = target_path.join("file2");
+    assert!(target_path.is_dir());
+    assert!(file1_path.is_file());
+    assert!(file2_path.is_file());
+
+    let mut contents = String::new();
+    fs::File::open(&file1_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file1_content);
+
+    contents.clear();
+    fs::File::open(&file2_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file2_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_take_from_dir_into_nonempty_dir() -> Result<(), Box<dyn Error>> {
+    let templ_dir = PathBuf::from_str(".templ.aar")?;
+    let file1_content = "Template";
+    let file2_content = "Other template";
+
+    let _t = Test::init(
+        "take_from_dir",
+        vec![templ_dir.clone()],
+        HashMap::from([
+            (templ_dir.join("file1"), file1_content.to_string()),
+            (templ_dir.join("file2"), file2_content.to_string()),
+            (PathBuf::from_str("other_file")?, String::new()),
+        ]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg(".");
+    cmd.assert().success();
+
+    let file1_path = Path::new("file1");
+    let file2_path = Path::new("file2");
+    assert!(file1_path.is_file());
+    assert!(file2_path.is_file());
+
+    let mut contents = String::new();
+    fs::File::open(&file1_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file1_content);
+
+    contents.clear();
+    fs::File::open(&file2_path)?.read_to_string(&mut contents)?;
+    assert_eq!(contents, file2_content);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_take_from_dir_conflict() -> Result<(), Box<dyn Error>> {
+    let templ_dir = PathBuf::from_str(".templ.aar")?;
+    let file1_content = "Template";
+    let file2_content = "Other template";
+
+    let _t = Test::init(
+        "take_from_dir",
+        vec![templ_dir.clone()],
+        HashMap::from([
+            (templ_dir.join("file1"), file1_content.to_string()),
+            (templ_dir.join("file2"), file2_content.to_string()),
+            (PathBuf::from_str("file1")?, String::new()),
+        ]),
+        "touch",
+    );
+
+    let mut cmd = Command::cargo_bin("templaar")?;
+    cmd.arg("take").arg(".");
+    cmd.assert().failure();
+
+    assert!(!Path::new("file2").exists());
+
+    Ok(())
+}
