@@ -35,7 +35,9 @@ enum Command {
     },
     /// Create a file from a template
     Take {
-        /// Name of the created file
+        /// Name of the created file.
+        /// Path in the case of a directory template.
+        #[clap(verbatim_doc_comment)]
         name: Option<String>,
         /// Use specific template
         #[clap(long, short = 't')]
@@ -105,6 +107,25 @@ impl fmt::Display for AmbiguousTemplate {
             f,
             "Ambiguous template: found {:?} in {:?}. Use -t to select the template.",
             self.names, self.dir,
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+struct InvalidTemplate {
+    templ_path: PathBuf,
+    reason: String,
+}
+
+impl error::Error for InvalidTemplate {}
+
+impl fmt::Display for InvalidTemplate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Invalid template {}: {}",
+            self.templ_path.to_str().ok_or(fmt::Error)?,
+            self.reason
         )
     }
 }
@@ -241,38 +262,104 @@ fn find_templ(name: &Option<String>) -> Result<Option<PathBuf>, Box<dyn error::E
     return find_templ_in_dir(&global_dir()?, name);
 }
 
+fn user_prompt_bool(prompt: &str) -> Result<bool, Box<dyn error::Error>> {
+    let mut buf = String::new();
+    print!("{} [Y/n]: ", prompt);
+
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut buf)?;
+
+    Ok(buf.trim().to_lowercase() != "n")
+}
+
 fn take(name: &Option<String>, template: &Option<String>) -> Result<(), Box<dyn error::Error>> {
-    // Find and read the template
-    let templ_file = find_templ(template)?.ok_or(NoTemplateFound)?;
-    let mut templ = String::new();
-    fs::File::open(&templ_file)?.read_to_string(&mut templ)?;
+    let templ = find_templ(template)?.ok_or(NoTemplateFound)?;
 
-    let filename = match name {
+    let target_name = match name {
         Some(n) => n.clone(),
-        None => path_to_templ(&templ_file),
+        None => path_to_templ(&templ),
     };
-    let file = env::current_dir()?.join(filename);
+    let target = env::current_dir()?.join(target_name);
 
-    if file.exists() {
-        return Err(Box::new(PathExists { path: file }));
+    if templ.is_dir() {
+        // Directory template
+
+        let templ_files = templ
+            .read_dir()?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>()?;
+
+        // Error if the template contains sub-directories
+        if templ_files.iter().any(|f| f.is_dir()) {
+            return Err(Box::new(InvalidTemplate {
+                templ_path: templ,
+                reason: "directory template contains sub-directories".to_string(),
+            }));
+        }
+
+        // Create the target directory, if it doesn't exist
+        if !target.exists() {
+            fs::create_dir(&target)?;
+        }
+
+        let target_files = target
+            .read_dir()?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>()?;
+
+        // Warn if the target directory is non-empty
+        if !target_files.is_empty() {
+            let prompt = format!(
+                "Directory {} is not empty, do you wish to continue?",
+                target.to_str().ok_or(fmt::Error)?
+            );
+            if !user_prompt_bool(&prompt)? {
+                return Ok(());
+            }
+        }
+
+        // Error if the target directory contains any of the template files
+        match target_files.iter().find(|file| {
+            templ_files
+                .iter()
+                .any(|f| file.file_name() == f.file_name())
+        }) {
+            Some(file) => return Err(Box::new(PathExists { path: file.clone() })),
+            None => {}
+        }
+
+        // Copy files from the template to the target directory
+        for file in templ_files {
+            fs::copy(&file, target.join(file.file_name().unwrap()))?;
+        }
+    } else {
+        // File template
+
+        // Error if the target already exists
+        if target.exists() {
+            return Err(Box::new(PathExists { path: target }));
+        }
+
+        // Copy the template into the target file
+        fs::copy(&templ, &target)?;
     }
 
-    // Write template contents to file and open it in EDITOR
-    fs::File::create(&file)?.write_all(templ.as_bytes())?;
-
+    // Open the target file/directory in the default editor
     let editor = env::var("EDITOR")?;
-    process::Command::new(editor).arg(&file).status()?;
+    process::Command::new(editor).arg(&target).status()?;
 
-    let mut file_contents = String::new();
-    fs::File::open(&file)?.read_to_string(&mut file_contents)?;
-    if file_contents == templ {
-        let mut buf = String::new();
-        print!("The file contains no change from the template. Save it anyways? [Y/n]: ");
-        io::stdout().flush()?;
-        io::stdin().read_line(&mut buf)?;
-
-        if buf.trim().to_lowercase() == "n" {
-            std::fs::remove_file(file)?;
+    // For normal file templates, check if the target file contents is different
+    // from the template and if not, warn and offer user not to save the target.
+    if templ.is_file() {
+        let mut target_contents = String::new();
+        let mut templ_contents = String::new();
+        fs::File::open(&target)?.read_to_string(&mut target_contents)?;
+        fs::File::open(&templ)?.read_to_string(&mut templ_contents)?;
+        if target_contents == templ_contents {
+            let prompt = "The file contains no change from the template. Save it anyways?";
+            if !user_prompt_bool(&prompt)? {
+                std::fs::remove_file(target)?;
+            }
         }
     }
 
