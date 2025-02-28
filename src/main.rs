@@ -1,9 +1,11 @@
 mod errors;
+mod list;
 mod new;
 mod take;
 mod utils;
 
 use clap::{Parser, Subcommand};
+use list::list;
 use new::new;
 use std::{path::PathBuf, process};
 use take::take;
@@ -42,6 +44,15 @@ enum Command {
         #[clap(long, short = 't')]
         template: Option<String>,
     },
+    /// List available templates
+    List {
+        /// Only list local templates
+        #[clap(long, short)]
+        local: bool,
+        /// Only list global templates
+        #[clap(long, short)]
+        global: bool,
+    },
 }
 
 fn main() {
@@ -54,6 +65,7 @@ fn main() {
             files,
         } => new(&name, global, &files),
         Command::Take { name, template } => take(&name, &template),
+        Command::List { local, global } => list(local, global),
     } {
         eprintln!("Error: {e}");
         process::exit(1);
