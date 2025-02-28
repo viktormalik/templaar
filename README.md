@@ -20,6 +20,9 @@ It is also possible to create a global template in `~/.config/templaar/`. This
 is done using the `--global` option of the `new` command and global templates
 are used when no template is found in the current or parent directories.
 
+The list of currently available templates (both local and global) can be shown
+by `templaar list`.
+
 Full synopsis of commands:
 
 ```
@@ -44,4 +47,12 @@ Arguments:
 Options:
   -t, --template <TEMPLATE>  Use specific template
   -h, --help                 Print help
+```
+```
+Usage: templaar list [OPTIONS]
+
+Options:
+  -l, --local   Only list local templates
+  -g, --global  Only list global templates
+  -h, --help    Print help
 ```
