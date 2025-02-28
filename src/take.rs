@@ -1,7 +1,5 @@
 use std::{
-    env, error,
-    ffi::OsStr,
-    fmt, fs,
+    env, error, fmt, fs,
     io::{self, Read},
     path::{Path, PathBuf},
     process,
@@ -9,7 +7,7 @@ use std::{
 
 use crate::{
     errors::{AmbiguousTemplate, InvalidTemplate, NoTemplateFound, PathExists},
-    utils::{global_dir, path_to_templ, user_prompt_bool},
+    utils::{global_dir, path_to_templ, templs_in_dir, user_prompt_bool},
 };
 
 /// Searches for a template file in `dir`.
@@ -19,22 +17,20 @@ fn find_templ_in_dir(
     dir: &Path,
     name: &Option<String>,
 ) -> Result<Option<PathBuf>, Box<dyn error::Error>> {
-    let templates: Vec<PathBuf> = fs::read_dir(dir)?
-        .filter_map(|f| match f {
-            Ok(file) => (match name {
-                Some(n) => path_to_templ(&file.path()) == *n,
-                None => file.path().extension() == Some(OsStr::new("aar")),
-            })
-            .then_some(file.path()),
-            Err(_) => None,
-        })
-        .collect();
+    let templates = templs_in_dir(dir)?;
+    let matches = match name {
+        Some(n) => templates
+            .into_iter()
+            .filter(|t| path_to_templ(t) == *n)
+            .collect(),
+        None => templates,
+    };
 
-    match &templates[..] {
+    match &matches[..] {
         [] => Ok(None),
         [f] => Ok(Some(f.clone())),
         _ => Err(Box::new(AmbiguousTemplate {
-            names: templates.iter().map(path_to_templ).collect(),
+            names: matches.iter().map(path_to_templ).collect(),
             dir: dir.to_path_buf(),
         })),
     }

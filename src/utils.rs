@@ -1,7 +1,9 @@
 use std::{
-    env, error, fs,
+    env, error,
+    ffi::OsStr,
+    fs,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -22,6 +24,20 @@ pub fn path_to_templ(path: &PathBuf) -> String {
         templ = &templ[1..];
     }
     templ.to_string()
+}
+
+fn is_templ(path: &Path) -> bool {
+    path.extension() == Some(OsStr::new("aar"))
+}
+
+/// Find all templates (files with the ".aar" extension) in `dir`.
+pub fn templs_in_dir(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn error::Error>> {
+    Ok(fs::read_dir(dir)?
+        .filter_map(|f| match f {
+            Ok(file) => (is_templ(&file.path())).then_some(file.path()),
+            Err(_) => None,
+        })
+        .collect())
 }
 
 /// Get global templates directory (~/.config/templaar).
